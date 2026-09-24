@@ -1,0 +1,62 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# ReelTune Workspace generated files & caches
+workspace/output/*
+!workspace/output/.gitkeep
+workspace/temp/*
+!workspace/temp/.gitkeep
+workspace/cache/*
+!workspace/cache/.gitkeep
+workspace/test/results/*
+!workspace/test/results/.gitkeep
+workspace/test/reports/*
+!workspace/test/reports/.gitkeep
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secrets & environment
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+
+# Symbolication related
+app.*.symbols
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+.widget_preview/
