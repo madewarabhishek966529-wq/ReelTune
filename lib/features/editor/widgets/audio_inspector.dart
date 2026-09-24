@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:reeltune/app/theme.dart';
 import 'package:reeltune/core/services/audio_analysis_service.dart';
@@ -130,7 +131,66 @@ class AudioInspector extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        // Quick Audio Actions (Import Music & Mute)
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.library_music_rounded, size: 16),
+                label: const Text('Add Music Track', style: TextStyle(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.secondary,
+                  side: const BorderSide(color: AppTheme.secondary),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                onPressed: () async {
+                  try {
+                    final result = await FilePicker.pickFile(type: FileType.audio);
+                    if (result != null && result.path != null) {
+                      await editorNotifier.importAudioFile(result.path!);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Imported audio: ${result.name}'),
+                            backgroundColor: AppTheme.secondary,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to import audio: $e'), backgroundColor: Colors.redAccent),
+                      );
+                    }
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              icon: Icon(
+                audioSettings.isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                size: 16,
+                color: audioSettings.isMuted ? Colors.redAccent : Colors.white,
+              ),
+              label: Text(
+                audioSettings.isMuted ? 'Muted' : 'Mute',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: audioSettings.isMuted ? Colors.redAccent : Colors.white,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: audioSettings.isMuted ? Colors.redAccent : AppTheme.border),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              onPressed: () => editorNotifier.toggleMute(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
 
         // Equalizer Section
         Row(
@@ -143,6 +203,22 @@ class AudioInspector extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 4),
+
+        // Quick EQ Presets
+        Wrap(
+          spacing: 8,
+          children: ['Flat', 'Bass Boost', 'Vocal Clarity', 'Podcast'].map((preset) {
+            return ActionChip(
+              label: Text(preset, style: const TextStyle(fontSize: 11)),
+              backgroundColor: AppTheme.surfaceVariant,
+              side: const BorderSide(color: AppTheme.border),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+              onPressed: () => editorNotifier.applyEqPreset(preset),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
         _buildSlider(
           label: 'Master Gain',
           value: audioSettings.gainDb,

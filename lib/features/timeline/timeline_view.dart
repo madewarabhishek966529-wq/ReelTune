@@ -36,70 +36,74 @@ class TimelineView extends StatelessWidget {
 
           // Main Multi-track scrollable body
           Expanded(
-            child: Row(
-              children: [
-                // Track Headers (Left sidebar: Video, Audio, Captions, FX)
-                _buildTrackHeaders(),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Track Headers (Left sidebar: Video, Audio, Captions, FX)
+                  _buildTrackHeaders(),
 
-                // Scrollable Tracks Area with Playhead
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapDown: (details) {
-                        final tappedTime = details.localPosition.dx / pps;
-                        editorNotifier.seekPlayhead(tappedTime);
-                      },
-                      child: SizedBox(
-                        width: timelineWidth,
-                        child: Stack(
-                          children: [
-                            // Tracks Content (isolated in RepaintBoundary for smooth 60fps performance)
-                            RepaintBoundary(
-                              child: Column(
-                                children: [
-                                  _buildTimeRuler(timelineWidth, pps),
-                                  const Divider(height: 1),
-                                  ...editorState.tracks.map((track) {
-                                    return _buildTrackLane(track, pps);
-                                  }),
-                                ],
+                  // Scrollable Tracks Area with Playhead
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) {
+                          final tappedTime = details.localPosition.dx / pps;
+                          editorNotifier.seekPlayhead(tappedTime);
+                        },
+                        child: SizedBox(
+                          width: timelineWidth,
+                          child: Stack(
+                            children: [
+                              // Tracks Content (isolated in RepaintBoundary for smooth 60fps performance)
+                              RepaintBoundary(
+                                child: Column(
+                                  children: [
+                                    _buildTimeRuler(timelineWidth, pps),
+                                    const Divider(height: 1),
+                                    ...editorState.tracks.map((track) {
+                                      return _buildTrackLane(track, pps);
+                                    }),
+                                  ],
+                                ),
                               ),
-                            ),
 
-                            // Playhead vertical line & cursor
-                            Positioned(
-                              left: editorState.playhead * pps,
-                              top: 0,
-                              bottom: 0,
-                              child: IgnorePointer(
-                                child: Container(
-                                  width: 2,
-                                  color: Colors.redAccent,
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        width: 12,
-                                        height: 12,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
+                              // Playhead vertical line & cursor
+                              Positioned(
+                                left: editorState.playhead * pps,
+                                top: 0,
+                                bottom: 0,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: 2,
+                                    color: Colors.redAccent,
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          width: 12,
+                                          height: 12,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
                                         ),
-                                      ),
-                                      const Spacer(),
-                                    ],
+                                        const Spacer(),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -113,89 +117,111 @@ class TimelineView extends StatelessWidget {
     final hasSelection = editorState.selectedItem != null;
 
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 44,
       color: AppTheme.surfaceVariant,
-      child: Row(
-        children: [
-          // Play / Pause
-          IconButton(
-            icon: Icon(editorState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
-            color: Colors.white,
-            iconSize: 22,
-            tooltip: editorState.isPlaying ? 'Pause' : 'Play',
-            onPressed: () => editorNotifier.togglePlayPause(),
-          ),
-          const SizedBox(width: 8),
-
-          // Current time readout
-          Text(
-            TimeFormatter.formatDetailed(editorState.playhead),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.primaryAccent),
-          ),
-          const Text(' / ', style: TextStyle(color: Colors.grey)),
-          Text(
-            TimeFormatter.formatDetailed(editorState.maxTimelineDuration),
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-
-          const VerticalDivider(width: 24, indent: 8, endIndent: 8),
-
-          // Split at Playhead
-          IconButton(
-            icon: const Icon(Icons.content_cut_rounded, size: 18),
-            color: hasSelection ? Colors.white : Colors.grey.shade600,
-            tooltip: 'Split at Playhead (S)',
-            onPressed: hasSelection ? () => editorNotifier.splitItemAtPlayhead() : null,
-          ),
-
-          // Duplicate
-          IconButton(
-            icon: const Icon(Icons.content_copy_rounded, size: 18),
-            color: hasSelection ? Colors.white : Colors.grey.shade600,
-            tooltip: 'Duplicate Clip',
-            onPressed: hasSelection ? () => editorNotifier.duplicateItem(editorState.selectedItemId!) : null,
-          ),
-
-          // Delete
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, size: 18),
-            color: hasSelection ? Colors.redAccent : Colors.grey.shade600,
-            tooltip: 'Delete Clip',
-            onPressed: hasSelection ? () => editorNotifier.deleteItem(editorState.selectedItemId!) : null,
-          ),
-
-          const VerticalDivider(width: 24, indent: 8, endIndent: 8),
-
-          // Undo / Redo
-          IconButton(
-            icon: const Icon(Icons.undo_rounded, size: 18),
-            color: canUndo ? Colors.white : Colors.grey.shade600,
-            tooltip: 'Undo',
-            onPressed: canUndo ? () => editorNotifier.undo() : null,
-          ),
-          IconButton(
-            icon: const Icon(Icons.redo_rounded, size: 18),
-            color: canRedo ? Colors.white : Colors.grey.shade600,
-            tooltip: 'Redo',
-            onPressed: canRedo ? () => editorNotifier.redo() : null,
-          ),
-
-          const Spacer(),
-
-          // Timeline Zoom controls
-          const Icon(Icons.zoom_out, size: 16, color: Colors.grey),
-          SizedBox(
-            width: 100,
-            child: Slider(
-              value: editorState.pixelsPerSecond,
-              min: 15.0,
-              max: 150.0,
-              onChanged: (v) => editorNotifier.setZoom(v),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Play / Pause
+            IconButton(
+              icon: Icon(editorState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+              color: Colors.white,
+              iconSize: 22,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: editorState.isPlaying ? 'Pause' : 'Play',
+              onPressed: () => editorNotifier.togglePlayPause(),
             ),
-          ),
-          const Icon(Icons.zoom_in, size: 16, color: Colors.grey),
-        ],
+            const SizedBox(width: 4),
+
+            // Current time readout
+            Text(
+              TimeFormatter.formatDetailed(editorState.playhead),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.primaryAccent),
+            ),
+            const Text(' / ', style: TextStyle(color: Colors.grey, fontSize: 11)),
+            Text(
+              TimeFormatter.formatDetailed(editorState.maxTimelineDuration),
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+
+            const VerticalDivider(width: 16, indent: 8, endIndent: 8),
+
+            // Split at Playhead
+            IconButton(
+              icon: const Icon(Icons.content_cut_rounded, size: 18),
+              color: hasSelection ? Colors.white : Colors.grey.shade600,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Split at Playhead',
+              onPressed: hasSelection ? () => editorNotifier.splitItemAtPlayhead() : null,
+            ),
+
+            // Duplicate
+            IconButton(
+              icon: const Icon(Icons.content_copy_rounded, size: 18),
+              color: hasSelection ? Colors.white : Colors.grey.shade600,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Duplicate Clip',
+              onPressed: hasSelection ? () => editorNotifier.duplicateItem(editorState.selectedItemId!) : null,
+            ),
+
+            // Delete
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              color: hasSelection ? Colors.redAccent : Colors.grey.shade600,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Delete Clip',
+              onPressed: hasSelection ? () => editorNotifier.deleteItem(editorState.selectedItemId!) : null,
+            ),
+
+            const VerticalDivider(width: 16, indent: 8, endIndent: 8),
+
+            // Undo / Redo
+            IconButton(
+              icon: const Icon(Icons.undo_rounded, size: 18),
+              color: canUndo ? Colors.white : Colors.grey.shade600,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Undo',
+              onPressed: canUndo ? () => editorNotifier.undo() : null,
+            ),
+            IconButton(
+              icon: const Icon(Icons.redo_rounded, size: 18),
+              color: canRedo ? Colors.white : Colors.grey.shade600,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Redo',
+              onPressed: canRedo ? () => editorNotifier.redo() : null,
+            ),
+
+            const VerticalDivider(width: 16, indent: 8, endIndent: 8),
+
+            // Timeline Zoom controls
+            const Icon(Icons.zoom_out, size: 16, color: Colors.grey),
+            SizedBox(
+              width: 80,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  trackHeight: 2,
+                ),
+                child: Slider(
+                  value: editorState.pixelsPerSecond,
+                  min: 15.0,
+                  max: 150.0,
+                  onChanged: (v) => editorNotifier.setZoom(v),
+                ),
+              ),
+            ),
+            const Icon(Icons.zoom_in, size: 16, color: Colors.grey),
+          ],
+        ),
       ),
     );
   }
@@ -219,7 +245,7 @@ class TimelineView extends StatelessWidget {
           const Divider(height: 1),
           ...editorState.tracks.map((track) {
             return Container(
-              height: 56,
+              height: 48,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               alignment: Alignment.centerLeft,
               decoration: const BoxDecoration(
@@ -257,7 +283,7 @@ class TimelineView extends StatelessWidget {
     final trackItems = editorState.items.where((i) => i.trackId == track.id).toList();
 
     return Container(
-      height: 56,
+      height: 48,
       decoration: const BoxDecoration(
         color: Color(0xFF161922),
         border: Border(bottom: BorderSide(color: AppTheme.border)),

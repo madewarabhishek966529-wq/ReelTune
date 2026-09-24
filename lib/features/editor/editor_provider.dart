@@ -25,6 +25,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   final AudioAnalysisService _audioAnalysisService;
   final FFmpegService _ffmpegService;
 
+  late final Future<void> _initFuture;
   Timer? _playbackTimer;
 
   EditorNotifier({
@@ -42,10 +43,16 @@ class EditorNotifier extends StateNotifier<EditorState> {
         super(
           EditorState(
             project: project,
+            tracks: [
+              TimelineTrackModel(projectId: project.id, type: TrackType.video, index: 0),
+              TimelineTrackModel(projectId: project.id, type: TrackType.audio, index: 1),
+              TimelineTrackModel(projectId: project.id, type: TrackType.text, index: 2),
+              TimelineTrackModel(projectId: project.id, type: TrackType.effects, index: 3),
+            ],
             audioSettings: AudioSettingsModel(projectId: project.id),
           ),
         ) {
-    _initializeProject();
+    _initFuture = _initializeProject();
   }
 
   Future<void> _initializeProject() async {
@@ -141,6 +148,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
 
   // --- Non-destructive Media Import ---
   Future<void> importMediaFile(String filePath) async {
+    await _initFuture;
     try {
       final probe = await _ffmpegService.probeMedia(filePath);
       final filename = filePath.split(Platform.pathSeparator).last;
@@ -209,6 +217,77 @@ class EditorNotifier extends StateNotifier<EditorState> {
       AppLogger.i('EditorNotifier', 'Imported media non-destructively: $filename');
     } catch (e, st) {
       AppLogger.e('EditorNotifier', 'Media import failed', e, st);
+    }
+  }
+
+  /// Import an audio file (music, voiceover, sound effect) onto the Audio track
+  Future<void> importAudioFile(String filePath) async {
+    await _initFuture;
+    try {
+      final probe = await _ffmpegService.probeMedia(filePath);
+      final filename = filePath.split(Platform.pathSeparator).last;
+
+      final media = MediaFileModel(
+        projectId: state.project.id,
+        originalPath: filePath,
+        filename: filename,
+        fileSize: probe.fileSize,
+        duration: probe.duration,
+        width: 0,
+        height: 0,
+        fps: 0,
+        videoCodec: '',
+        audioCodec: probe.audioCodec.isNotEmpty ? probe.audioCodec : 'aac',
+        sampleRate: probe.sampleRate,
+        channels: probe.channels,
+        isOriginalPreserved: true,
+      );
+
+      await _mediaRepo.addMediaFile(media);
+      final updatedMedia = [...state.mediaFiles, media];
+
+      final audioTrack = state.tracks.firstWhere(
+        (t) => t.type == TrackType.audio,
+        orElse: () => state.tracks.length > 1 ? state.tracks[1] : state.tracks.first,
+      );
+
+      _pushUndo();
+
+      final newItem = TimelineItemModel(
+        trackId: audioTrack.id,
+        projectId: state.project.id,
+        mediaFileId: media.id,
+        title: filename,
+        startTime: 0.0,
+        duration: media.duration,
+        sourceStartTime: 0.0,
+        sourceDuration: media.duration,
+      );
+
+      await _timelineRepo.saveItem(newItem);
+      final updatedItems = [...state.items, newItem];
+
+      final newDuration = math.max(state.project.duration, newItem.startTime + newItem.duration);
+      final updatedProj = state.project.copyWith(duration: newDuration);
+      await _projectRepo.updateProject(updatedProj);
+
+      final analysis = await _audioAnalysisService.analyzeAudio(
+        filePath: media.originalPath,
+        duration: newDuration,
+      );
+
+      state = state.copyWith(
+        project: updatedProj,
+        mediaFiles: updatedMedia,
+        items: updatedItems,
+        audioAnalysis: analysis,
+        selectedItemId: newItem.id,
+      );
+
+      _triggerAutosave();
+      AppLogger.i('EditorNotifier', 'Imported audio file non-destructively: $filename');
+    } catch (e, st) {
+      AppLogger.e('EditorNotifier', 'Audio import failed', e, st);
     }
   }
 
@@ -445,6 +524,52 @@ class EditorNotifier extends StateNotifier<EditorState> {
     await _timelineRepo.saveAudioSettings(initial);
     state = state.copyWith(audioSettings: initial);
     _triggerAutosave();
+  }
+
+  Future<void> toggleMute() async {
+    final updated = state.audioSettings.copyWith(isMuted: !state.audioSettings.isMuted);
+    await updateAudioSettings(updated);
+  }
+
+  Future<void> applyEqPreset(String presetName) async {
+    AudioSettingsModel updated;
+    switch (presetName) {
+      case 'Bass Boost':
+        updated = state.audioSettings.copyWith(
+          bassGainDb: 6.0,
+          midGainDb: 0.0,
+          trebleGainDb: 1.0,
+          isEnhanced: true,
+        );
+        break;
+      case 'Vocal Clarity':
+        updated = state.audioSettings.copyWith(
+          bassGainDb: -2.0,
+          midGainDb: 4.0,
+          trebleGainDb: 3.0,
+          isEnhanced: true,
+        );
+        break;
+      case 'Podcast':
+        updated = state.audioSettings.copyWith(
+          bassGainDb: 1.0,
+          midGainDb: 3.0,
+          trebleGainDb: 2.0,
+          compressorEnabled: true,
+          normalizeLoudness: true,
+          isEnhanced: true,
+        );
+        break;
+      case 'Flat':
+      default:
+        updated = state.audioSettings.copyWith(
+          bassGainDb: 0.0,
+          midGainDb: 0.0,
+          trebleGainDb: 0.0,
+        );
+        break;
+    }
+    await updateAudioSettings(updated);
   }
 
   // --- Creative Effects & Beat Sync ---

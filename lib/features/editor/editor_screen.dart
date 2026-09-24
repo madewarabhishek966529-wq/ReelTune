@@ -35,45 +35,19 @@ class EditorScreen extends ConsumerWidget {
           },
           tooltip: 'Back to Projects',
         ),
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(
-              child: Text(
-                project.name,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                overflow: TextOverflow.ellipsis,
-              ),
+            Text(
+              project.name,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
-            const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceVariant,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: Text(
-                '${project.width}x${project.height} (${project.fps.toInt()}fps)',
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppTheme.accentNeon.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.shield_outlined, size: 12, color: AppTheme.accentNeon),
-                  SizedBox(width: 4),
-                  Text(
-                    'Non-Destructive',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.accentNeon),
-                  ),
-                ],
-              ),
+            Text(
+              '${project.width}x${project.height} (${project.fps.toInt()}fps) • Non-Destructive',
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ],
         ),
@@ -81,44 +55,44 @@ class EditorScreen extends ConsumerWidget {
           // Undo/Redo
           IconButton(
             icon: const Icon(Icons.undo_rounded, size: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             tooltip: 'Undo',
             onPressed: editorState.undoStack.isNotEmpty ? () => editorNotifier.undo() : null,
           ),
           IconButton(
             icon: const Icon(Icons.redo_rounded, size: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             tooltip: 'Redo',
             onPressed: editorState.redoStack.isNotEmpty ? () => editorNotifier.redo() : null,
           ),
-          const SizedBox(width: 4),
-
           // Import Media button
-          TextButton.icon(
-            icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-            label: const Text('Import'),
+          IconButton(
+            icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            tooltip: 'Import Video/Audio',
             onPressed: () => _pickAndImportMedia(context, editorNotifier),
           ),
-          const SizedBox(width: 8),
-
           // Export Button
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.only(right: 12, left: 4),
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.ios_share_rounded, size: 16),
-              label: const Text('Export'),
+              icon: const Icon(Icons.ios_share_rounded, size: 14),
+              label: const Text('Export', style: TextStyle(fontSize: 12)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: editorState.mediaFiles.isNotEmpty
-                    ? AppTheme.primary
-                    : Colors.grey,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                backgroundColor: editorState.mediaFiles.isNotEmpty ? AppTheme.primary : Colors.grey.shade700,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: const Size(60, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              onPressed: editorState.mediaFiles.isEmpty
-                  ? null
-                  : () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => ExportModal(editorState: editorState),
-                      );
-                    },
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => ExportModal(editorState: editorState),
+                );
+              },
             ),
           ),
         ],
@@ -145,6 +119,7 @@ class EditorScreen extends ConsumerWidget {
                         activeEffects: editorState.effects,
                         activeCaption: _getActiveCaptionAtPlayhead(editorState),
                         mediaFiles: editorState.mediaFiles,
+                        audioSettings: editorState.audioSettings,
                         onTogglePlay: () => editorNotifier.togglePlayPause(),
                         onSeek: (t) => editorNotifier.seekPlayhead(t),
                       ),
@@ -242,6 +217,7 @@ class EditorScreen extends ConsumerWidget {
                             activeEffects: editorState.effects,
                             activeCaption: _getActiveCaptionAtPlayhead(editorState),
                             mediaFiles: editorState.mediaFiles,
+                            audioSettings: editorState.audioSettings,
                             onTogglePlay: () => editorNotifier.togglePlayPause(),
                             onSeek: (t) => editorNotifier.seekPlayhead(t),
                           ),
@@ -332,16 +308,76 @@ class EditorScreen extends ConsumerWidget {
     return null;
   }
 
-  /// Pick a video file and import it into the editor
+  /// Pick a video or audio file and import it into the editor
   Future<void> _pickAndImportMedia(BuildContext context, EditorNotifier editorNotifier) async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade700,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                'Import Media',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: AppTheme.primary,
+                  child: Icon(Icons.videocam_rounded, color: Colors.white, size: 20),
+                ),
+                title: const Text('Import Video', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('MP4, MOV, MKV to Video track', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _executePickFile(context, editorNotifier, FileType.video);
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: AppTheme.secondary,
+                  child: Icon(Icons.audiotrack_rounded, color: Colors.white, size: 20),
+                ),
+                title: const Text('Import Audio / Music', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('MP3, WAV, AAC, M4A to Audio track', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _executePickFile(context, editorNotifier, FileType.audio);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executePickFile(BuildContext context, EditorNotifier editorNotifier, FileType type) async {
     try {
-      final result = await FilePicker.pickFile(
-        type: FileType.video,
-      );
+      final result = await FilePicker.pickFile(type: type);
 
       if (result != null && result.path != null) {
         final filePath = result.path!;
-        await editorNotifier.importMediaFile(filePath);
+        if (type == FileType.audio) {
+          await editorNotifier.importAudioFile(filePath);
+        } else {
+          await editorNotifier.importMediaFile(filePath);
+        }
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

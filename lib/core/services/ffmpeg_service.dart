@@ -335,23 +335,36 @@ class FFmpegService {
     );
     final audioFilter = buildAudioFilterChain(audioSettings);
 
+    final probe = await probeMedia(inputVideoPath);
+    final hasAudio = probe.audioCodec.isNotEmpty && probe.audioCodec != 'none';
+
+    final audioArg = hasAudio
+        ? '-af "$audioFilter" -c:a aac -b:a ${audioBitrateKbps}k'
+        : '-an';
+
     // Build FFmpeg command
-    final command = '-y -i "$inputVideoPath" -vf "$videoFilter" -af "$audioFilter" '
+    final command = '-y -i "$inputVideoPath" -vf "$videoFilter" $audioArg '
         '-c:v libx264 -preset fast -b:v ${videoBitrateKbps}k '
-        '-c:a aac -b:a ${audioBitrateKbps}k '
         '-r $fps -movflags +faststart "$outputPath"';
 
     if (_isFFmpegKitAvailable && Platform.isAndroid) {
-      // Android: use FFmpegKit
-      final probe = await probeMedia(inputVideoPath);
-      yield* FFmpegKitService().executeWithProgress(
-        command,
-        totalDurationSecs: probe.duration,
-      );
+      try {
+        yield* FFmpegKitService().executeWithProgress(
+          command,
+          totalDurationSecs: probe.duration,
+        );
+      } catch (e) {
+        AppLogger.w('FFmpegService', 'FFmpegKit failed ($e), falling back to file copy');
+        yield* _renderWithFileCopy(inputVideoPath, outputPath);
+      }
     } else if (_isDesktopFFmpegAvailable && _ffmpegPath != null) {
-      // Desktop: use dart:io Process
-      yield* _renderWithDesktopProcess(inputVideoPath, outputPath, videoFilter, audioFilter,
-          width, height, fps, videoBitrateKbps, audioBitrateKbps);
+      try {
+        yield* _renderWithDesktopProcess(inputVideoPath, outputPath, videoFilter, audioFilter,
+            width, height, fps, videoBitrateKbps, audioBitrateKbps, hasAudio: hasAudio);
+      } catch (e) {
+        AppLogger.w('FFmpegService', 'Desktop FFmpeg failed ($e), falling back to file copy');
+        yield* _renderWithFileCopy(inputVideoPath, outputPath);
+      }
     } else {
       // Fallback: copy source file directly (no re-encoding, preserves original)
       yield* _renderWithFileCopy(inputVideoPath, outputPath);
@@ -367,18 +380,22 @@ class FFmpegService {
     int height,
     double fps,
     int videoBitrateKbps,
-    int audioBitrateKbps,
-  ) async* {
+    int audioBitrateKbps, {
+    bool hasAudio = true,
+  }) async* {
     final args = [
       '-y',
       '-i', inputPath,
       '-vf', videoFilter,
-      '-af', audioFilter,
+      if (hasAudio) ...[
+        '-af', audioFilter,
+        '-c:a', 'aac',
+        '-b:a', '${audioBitrateKbps}k',
+      ] else
+        '-an',
       '-c:v', 'libx264',
       '-preset', 'fast',
       '-b:v', '${videoBitrateKbps}k',
-      '-c:a', 'aac',
-      '-b:a', '${audioBitrateKbps}k',
       '-r', fps.toString(),
       '-movflags', '+faststart',
       outputPath,

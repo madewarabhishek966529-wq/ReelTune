@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:ffmpeg_kit_flutter_full_gpl/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_full_gpl/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_full_gpl/return_code.dart';
@@ -17,6 +18,8 @@ class FFmpegKitService {
 
     final completer = Completer<bool>();
 
+    String? lastError;
+
     final session = await FFmpegKit.executeAsync(
       command,
       (session) async {
@@ -28,8 +31,8 @@ class FFmpegKitService {
           AppLogger.w('FFmpegKitService', 'FFmpeg command cancelled');
           completer.complete(false);
         } else {
-          final logs = await session.getAllLogsAsString();
-          AppLogger.e('FFmpegKitService', 'FFmpeg command failed: $logs');
+          lastError = await session.getAllLogsAsString();
+          AppLogger.e('FFmpegKitService', 'FFmpeg command failed: $lastError');
           completer.complete(false);
         }
       },
@@ -43,7 +46,6 @@ class FFmpegKitService {
           final timeMs = statistics.getTime();
           if (timeMs > 0) {
             final progress = (timeMs / 1000.0) / totalDurationSecs;
-            // We can't yield from a callback, so we just log
             AppLogger.d('FFmpegKit', 'Progress: ${(progress * 100).toStringAsFixed(1)}%');
           }
         }
@@ -79,7 +81,7 @@ class FFmpegKitService {
     if (success) {
       yield 1.0;
     } else {
-      throw Exception('FFmpeg execution failed');
+      throw Exception('FFmpeg execution failed: ${lastError ?? "unknown error"}');
     }
   }
 
@@ -89,13 +91,11 @@ class FFmpegKitService {
       final session = await FFprobeKit.getMediaInformation(filePath);
       final info = session.getMediaInformation();
       if (info != null) {
-        // Build a JSON-like map from MediaInformation
         final streams = info.getStreams();
-        final format = info.getFormatProperties();
+        final format = info.getFormatProperties() ?? {};
+        final streamsList = streams.map((s) => s.getAllProperties() ?? {}).toList();
 
-        final streamsJson = streams.map((s) => s.getAllProperties()).toList();
-
-        return '{"streams": $streamsJson, "format": $format}';
+        return jsonEncode({'streams': streamsList, 'format': format});
       }
     } catch (e) {
       AppLogger.e('FFmpegKitService', 'FFprobe error', e);

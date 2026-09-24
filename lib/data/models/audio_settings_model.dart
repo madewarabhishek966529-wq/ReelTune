@@ -4,6 +4,7 @@ class AudioSettingsModel {
   final String id;
   final String projectId;
   final bool isEnhanced; // Original vs. Enhanced toggle
+  final bool isMuted;
 
   // Equalizer & Gain
   final double gainDb; // -24 to +24 dB
@@ -34,6 +35,7 @@ class AudioSettingsModel {
     String? id,
     required this.projectId,
     this.isEnhanced = false, // Preserves original by default!
+    this.isMuted = false,
     this.gainDb = 0.0,
     this.bassGainDb = 0.0,
     this.midGainDb = 0.0,
@@ -56,6 +58,7 @@ class AudioSettingsModel {
     String? id,
     String? projectId,
     bool? isEnhanced,
+    bool? isMuted,
     double? gainDb,
     double? bassGainDb,
     double? midGainDb,
@@ -77,6 +80,7 @@ class AudioSettingsModel {
       id: id ?? this.id,
       projectId: projectId ?? this.projectId,
       isEnhanced: isEnhanced ?? this.isEnhanced,
+      isMuted: isMuted ?? this.isMuted,
       gainDb: gainDb ?? this.gainDb,
       bassGainDb: bassGainDb ?? this.bassGainDb,
       midGainDb: midGainDb ?? this.midGainDb,
@@ -101,6 +105,7 @@ class AudioSettingsModel {
       'id': id,
       'project_id': projectId,
       'is_enhanced': isEnhanced ? 1 : 0,
+      'is_muted': isMuted ? 1 : 0,
       'gain_db': gainDb,
       'bass_gain_db': bassGainDb,
       'mid_gain_db': midGainDb,
@@ -125,6 +130,7 @@ class AudioSettingsModel {
       id: map['id'] as String,
       projectId: map['project_id'] as String,
       isEnhanced: (map['is_enhanced'] as int?) == 1,
+      isMuted: (map['is_muted'] as int?) == 1,
       gainDb: (map['gain_db'] as num?)?.toDouble() ?? 0.0,
       bassGainDb: (map['bass_gain_db'] as num?)?.toDouble() ?? 0.0,
       midGainDb: (map['mid_gain_db'] as num?)?.toDouble() ?? 0.0,

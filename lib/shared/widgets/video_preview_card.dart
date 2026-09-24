@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:reeltune/app/theme.dart';
 import 'package:reeltune/core/utilities/time_formatter.dart';
+import 'package:reeltune/data/models/audio_settings_model.dart';
 import 'package:reeltune/data/models/caption_model.dart';
 import 'package:reeltune/data/models/effect_model.dart';
 import 'package:reeltune/data/models/media_file_model.dart';
@@ -18,6 +19,7 @@ class VideoPreviewCard extends StatefulWidget {
   final List<EffectModel> activeEffects;
   final CaptionModel? activeCaption;
   final List<MediaFileModel> mediaFiles;
+  final AudioSettingsModel? audioSettings;
   final VoidCallback onTogglePlay;
   final ValueChanged<double> onSeek;
 
@@ -30,6 +32,7 @@ class VideoPreviewCard extends StatefulWidget {
     this.activeEffects = const [],
     this.activeCaption,
     this.mediaFiles = const [],
+    this.audioSettings,
     required this.onTogglePlay,
     required this.onSeek,
   });
@@ -81,7 +84,27 @@ class _VideoPreviewCardState extends State<VideoPreviewCard> {
           _controller!.setPlaybackSpeed(speed);
         }
       }
+
+      // Sync volume & audio settings
+      _syncAudioVolume();
     }
+  }
+
+  void _syncAudioVolume() {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    double volume = 1.0;
+    if (widget.audioSettings != null) {
+      if (widget.audioSettings!.isMuted) {
+        volume = 0.0;
+      } else {
+        final linear = math.pow(10, (widget.audioSettings!.gainDb.clamp(-24.0, 12.0)) / 20.0).toDouble();
+        volume = linear.clamp(0.0, 1.0);
+      }
+    }
+    if (widget.activeItem != null) {
+      volume = (volume * widget.activeItem!.volume).clamp(0.0, 1.0);
+    }
+    _controller!.setVolume(volume);
   }
 
   String? _getActiveVideoPath() {
@@ -133,6 +156,8 @@ class _VideoPreviewCardState extends State<VideoPreviewCard> {
       if (widget.isPlaying) {
         controller.play();
       }
+
+      _syncAudioVolume();
 
       if (mounted) {
         setState(() {
@@ -186,14 +211,32 @@ class _VideoPreviewCardState extends State<VideoPreviewCard> {
             // Video Frame
             AspectRatio(
               aspectRatio: 9 / 16,
-              child: Transform.scale(
-                scale: (widget.activeItem?.scale ?? 1.0) * zoomFactor,
-                child: Transform.rotate(
-                  angle: (widget.activeItem?.rotation ?? 0.0) * math.pi / 180,
-                  child: _buildVideoContent(hasGlitch),
+              child: GestureDetector(
+                onTap: widget.onTogglePlay,
+                behavior: HitTestBehavior.opaque,
+                child: Transform.scale(
+                  scale: (widget.activeItem?.scale ?? 1.0) * zoomFactor,
+                  child: Transform.rotate(
+                    angle: (widget.activeItem?.rotation ?? 0.0) * math.pi / 180,
+                    child: _buildVideoContent(hasGlitch),
+                  ),
                 ),
               ),
             ),
+
+            // Play icon overlay when paused and loaded
+            if (!widget.isPlaying && _controller != null && _controller!.value.isInitialized)
+              IgnorePointer(
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded, size: 32, color: Colors.white),
+                ),
+              ),
 
             // Vignette simulation
             if ((widget.activeItem?.vignette ?? 0.0) > 0.0)
@@ -240,11 +283,11 @@ class _VideoPreviewCardState extends State<VideoPreviewCard> {
                 ),
               ),
 
-            // Controls Overlay at Bottom
+            // Controls Overlay at Bottom (Responsive, zero overflow)
             Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
+              left: 8,
+              right: 8,
+              bottom: 8,
               child: _buildControls(),
             ),
           ],
@@ -393,66 +436,69 @@ class _VideoPreviewCardState extends State<VideoPreviewCard> {
   }
 
   Widget _buildControls() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xCC181B24),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Seek bar
-          if (widget.duration > 0)
-            SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                activeTrackColor: AppTheme.primaryAccent,
-                inactiveTrackColor: Colors.white24,
-                thumbColor: AppTheme.primaryAccent,
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-              ),
-              child: Slider(
-                value: widget.playhead.clamp(0.0, widget.duration),
-                max: widget.duration > 0 ? widget.duration : 1.0,
-                onChanged: (value) => widget.onSeek(value),
-              ),
-            ),
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 250;
+
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isNarrow ? 8 : 12,
+            vertical: isNarrow ? 4 : 6,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xE6181B24),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                icon: Icon(widget.isPlaying ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded),
-                iconSize: 32,
+                icon: Icon(
+                  widget.isPlaying
+                      ? Icons.pause_circle_filled_rounded
+                      : Icons.play_circle_fill_rounded,
+                ),
+                iconSize: isNarrow ? 26 : 30,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
                 color: AppTheme.primaryAccent,
                 onPressed: widget.onTogglePlay,
               ),
-              const SizedBox(width: 8),
-              Text(
-                TimeFormatter.formatDuration(widget.playhead),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.white),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  '${TimeFormatter.formatDuration(widget.playhead)} / ${TimeFormatter.formatDuration(widget.duration)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: isNarrow ? 11 : 12,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Text(' / ', style: TextStyle(color: Colors.grey, fontSize: 13)),
-              Text(
-                TimeFormatter.formatDuration(widget.duration),
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.replay_5_rounded, size: 20, color: Colors.white70),
-                onPressed: () => widget.onSeek(widget.playhead - 5.0),
-                tooltip: 'Back 5s',
-              ),
-              IconButton(
-                icon: const Icon(Icons.forward_5_rounded, size: 20, color: Colors.white70),
-                onPressed: () => widget.onSeek(widget.playhead + 5.0),
-                tooltip: 'Forward 5s',
-              ),
+              if (!isNarrow) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.replay_5_rounded, size: 18, color: Colors.white70),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: () => widget.onSeek(widget.playhead - 5.0),
+                  tooltip: 'Back 5s',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.forward_5_rounded, size: 18, color: Colors.white70),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: () => widget.onSeek(widget.playhead + 5.0),
+                  tooltip: 'Forward 5s',
+                ),
+              ],
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
