@@ -106,44 +106,46 @@ class EditorScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Middle Stage: Video Preview (Left) + Inspector Drawer (Right)
-          Expanded(
-            flex: 6,
-            child: Row(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 700;
+
+          if (isCompact) {
+            // Mobile / Portrait Phone Layout (smooth stacked view)
+            return Column(
               children: [
-                // Video Preview Canvas
+                // Top: Video Preview Player (isolated for smooth rendering)
                 Expanded(
-                  flex: 5,
+                  flex: 4,
                   child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: VideoPreviewCard(
-                      playhead: editorState.playhead,
-                      duration: editorState.maxTimelineDuration,
-                      isPlaying: editorState.isPlaying,
-                      activeItem: editorState.selectedItem,
-                      activeEffects: editorState.effects,
-                      activeCaption: editorState.captions.isEmpty ? null : editorState.captions.first,
-                      onTogglePlay: () => editorNotifier.togglePlayPause(),
-                      onSeek: (t) => editorNotifier.seekPlayhead(t),
+                    padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
+                    child: RepaintBoundary(
+                      child: VideoPreviewCard(
+                        playhead: editorState.playhead,
+                        duration: editorState.maxTimelineDuration,
+                        isPlaying: editorState.isPlaying,
+                        activeItem: editorState.selectedItem,
+                        activeEffects: editorState.effects,
+                        activeCaption: editorState.captions.isEmpty ? null : editorState.captions.first,
+                        onTogglePlay: () => editorNotifier.togglePlayPause(),
+                        onSeek: (t) => editorNotifier.seekPlayhead(t),
+                      ),
                     ),
                   ),
                 ),
 
-                // Inspector Tabs (Right Sidebar)
+                // Middle: Tabbed Inspector Drawer
                 Expanded(
-                  flex: 4,
+                  flex: 3,
                   child: Container(
                     decoration: const BoxDecoration(
                       color: AppTheme.surface,
-                      border: Border(left: BorderSide(color: AppTheme.border)),
+                      border: Border(top: BorderSide(color: AppTheme.border)),
                     ),
                     child: Column(
                       children: [
-                        // Tab Selector Header
                         Container(
-                          height: 44,
+                          height: 40,
                           decoration: const BoxDecoration(
                             color: AppTheme.surfaceVariant,
                             border: Border(bottom: BorderSide(color: AppTheme.border)),
@@ -157,8 +159,6 @@ class EditorScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
-
-                        // Tab Content View
                         Expanded(
                           child: IndexedStack(
                             index: editorState.activeInspectorTab,
@@ -189,19 +189,115 @@ class EditorScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
 
-          // Bottom Stage: Multi-Track Timeline
-          Expanded(
-            flex: 4,
-            child: TimelineView(
-              editorState: editorState,
-              editorNotifier: editorNotifier,
-            ),
-          ),
-        ],
+                // Bottom: Multi-Track Timeline
+                Expanded(
+                  flex: 3,
+                  child: RepaintBoundary(
+                    child: TimelineView(
+                      editorState: editorState,
+                      editorNotifier: editorNotifier,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          // Desktop / Landscape Layout (Side-by-side)
+          return Column(
+            children: [
+              Expanded(
+                flex: 6,
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: RepaintBoundary(
+                          child: VideoPreviewCard(
+                            playhead: editorState.playhead,
+                            duration: editorState.maxTimelineDuration,
+                            isPlaying: editorState.isPlaying,
+                            activeItem: editorState.selectedItem,
+                            activeEffects: editorState.effects,
+                            activeCaption: editorState.captions.isEmpty ? null : editorState.captions.first,
+                            onTogglePlay: () => editorNotifier.togglePlayPause(),
+                            onSeek: (t) => editorNotifier.seekPlayhead(t),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 4,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: AppTheme.surface,
+                          border: Border(left: BorderSide(color: AppTheme.border)),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              height: 44,
+                              decoration: const BoxDecoration(
+                                color: AppTheme.surfaceVariant,
+                                border: Border(bottom: BorderSide(color: AppTheme.border)),
+                              ),
+                              child: Row(
+                                children: [
+                                  _buildInspectorTab(context, editorState, editorNotifier, 0, 'Visuals', Icons.tune_rounded),
+                                  _buildInspectorTab(context, editorState, editorNotifier, 1, 'Audio EQ', Icons.graphic_eq_rounded),
+                                  _buildInspectorTab(context, editorState, editorNotifier, 2, 'Effects', Icons.auto_awesome_rounded),
+                                  _buildInspectorTab(context, editorState, editorNotifier, 3, 'Captions', Icons.subtitles_rounded),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: IndexedStack(
+                                index: editorState.activeInspectorTab,
+                                children: [
+                                  VideoInspector(
+                                    selectedItem: editorState.selectedItem,
+                                    editorNotifier: editorNotifier,
+                                  ),
+                                  AudioInspector(
+                                    audioSettings: editorState.audioSettings,
+                                    audioAnalysis: editorState.audioAnalysis,
+                                    editorNotifier: editorNotifier,
+                                  ),
+                                  EffectsInspector(
+                                    effects: editorState.effects,
+                                    currentPlayhead: editorState.playhead,
+                                    editorNotifier: editorNotifier,
+                                  ),
+                                  CaptionsInspector(
+                                    captions: editorState.captions,
+                                    currentPlayhead: editorState.playhead,
+                                    editorNotifier: editorNotifier,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                flex: 4,
+                child: RepaintBoundary(
+                  child: TimelineView(
+                    editorState: editorState,
+                    editorNotifier: editorNotifier,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

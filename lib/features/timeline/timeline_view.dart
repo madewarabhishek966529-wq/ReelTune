@@ -55,15 +55,17 @@ class TimelineView extends StatelessWidget {
                         width: timelineWidth,
                         child: Stack(
                           children: [
-                            // Tracks Content
-                            Column(
-                              children: [
-                                _buildTimeRuler(timelineWidth, pps),
-                                const Divider(height: 1),
-                                ...editorState.tracks.map((track) {
-                                  return _buildTrackLane(track, pps);
-                                }),
-                              ],
+                            // Tracks Content (isolated in RepaintBoundary for smooth 60fps performance)
+                            RepaintBoundary(
+                              child: Column(
+                                children: [
+                                  _buildTimeRuler(timelineWidth, pps),
+                                  const Divider(height: 1),
+                                  ...editorState.tracks.map((track) {
+                                    return _buildTrackLane(track, pps);
+                                  }),
+                                ],
+                              ),
                             ),
 
                             // Playhead vertical line & cursor
@@ -291,11 +293,13 @@ class TimelineView extends StatelessWidget {
                         Positioned.fill(
                           child: Opacity(
                             opacity: 0.6,
-                            child: CustomPaint(
-                              painter: WaveformPainter(
-                                points: editorState.audioAnalysis?.waveformPoints ?? [],
-                                waveColor: _trackColor(track.type),
-                                beatColor: Colors.transparent,
+                            child: RepaintBoundary(
+                              child: CustomPaint(
+                                painter: WaveformPainter(
+                                  points: editorState.audioAnalysis?.waveformPoints ?? [],
+                                  waveColor: _trackColor(track.type),
+                                  beatColor: Colors.transparent,
+                                ),
                               ),
                             ),
                           ),
