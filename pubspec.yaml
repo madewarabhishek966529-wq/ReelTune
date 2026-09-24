@@ -44,7 +44,7 @@ dependencies:
   intl: ^0.20.3
   crypto: ^3.0.7
   video_player: ^2.14.0
-  ffmpeg_kit_flutter_full_gpl: ^6.0.3
+  ffmpeg_kit_flutter_new: ^4.6.0
   permission_handler: ^13.0.2
   share_plus: ^13.3.0
   open_file: ^4.0.0
