@@ -433,25 +433,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _handleDirectImport(BuildContext context, ProjectListNotifier notifier) async {
-    final result = await FilePickerPlatform.instance.pickFiles(
-      type: FileType.video,
-    );
-
-    if (result.isNotEmpty && result.first.path != null) {
-      final filePath = result.first.path!;
-      final filename = filePath.split(RegExp(r'[\\/]')).last;
-
-      final project = await notifier.createNewProject(
-        name: filename.replaceAll(RegExp(r'\.[^.]+$'), ''),
+    try {
+      final result = await FilePicker.pickFile(
+        type: FileType.video,
       );
 
-      if (context.mounted) {
-        // Open editor and import video
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => EditorScreen(project: project)),
+      if (result != null && result.path != null) {
+        final filePath = result.path!;
+        final filename = result.name;
+
+        final project = await notifier.createNewProject(
+          name: filename.replaceAll(RegExp(r'\.[^.]+$'), ''),
         );
-        ref.read(editorProvider(project).notifier).importMediaFile(filePath);
+
+        if (context.mounted) {
+          // Open editor and import video
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => EditorScreen(project: project)),
+          );
+          // Import the file into the editor
+          ref.read(editorProvider(project).notifier).importMediaFile(filePath);
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Import failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     }
   }

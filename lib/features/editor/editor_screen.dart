@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reeltune/app/theme.dart';
+import 'package:reeltune/data/models/caption_model.dart';
 import 'package:reeltune/data/models/project_model.dart';
 import 'package:reeltune/features/editor/editor_provider.dart';
 import 'package:reeltune/features/editor/editor_state.dart';
@@ -28,14 +29,20 @@ class EditorScreen extends ConsumerWidget {
         titleSpacing: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            editorNotifier.cancelPlayback();
+            Navigator.pop(context);
+          },
           tooltip: 'Back to Projects',
         ),
         title: Row(
           children: [
-            Text(
-              project.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Flexible(
+              child: Text(
+                project.name,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             const SizedBox(width: 10),
             Container(
@@ -71,18 +78,24 @@ class EditorScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          // Undo/Redo
+          IconButton(
+            icon: const Icon(Icons.undo_rounded, size: 20),
+            tooltip: 'Undo',
+            onPressed: editorState.undoStack.isNotEmpty ? () => editorNotifier.undo() : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.redo_rounded, size: 20),
+            tooltip: 'Redo',
+            onPressed: editorState.redoStack.isNotEmpty ? () => editorNotifier.redo() : null,
+          ),
+          const SizedBox(width: 4),
+
           // Import Media button
           TextButton.icon(
             icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-            label: const Text('Import Media'),
-            onPressed: () async {
-              final result = await FilePickerPlatform.instance.pickFiles(
-                type: FileType.video,
-              );
-              if (result.isNotEmpty && result.first.path != null) {
-                editorNotifier.importMediaFile(result.first.path!);
-              }
-            },
+            label: const Text('Import'),
+            onPressed: () => _pickAndImportMedia(context, editorNotifier),
           ),
           const SizedBox(width: 8),
 
@@ -93,15 +106,19 @@ class EditorScreen extends ConsumerWidget {
               icon: const Icon(Icons.ios_share_rounded, size: 16),
               label: const Text('Export'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
+                backgroundColor: editorState.mediaFiles.isNotEmpty
+                    ? AppTheme.primary
+                    : Colors.grey,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               ),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => ExportModal(editorState: editorState),
-                );
-              },
+              onPressed: editorState.mediaFiles.isEmpty
+                  ? null
+                  : () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => ExportModal(editorState: editorState),
+                      );
+                    },
             ),
           ),
         ],
@@ -111,10 +128,10 @@ class EditorScreen extends ConsumerWidget {
           final isCompact = constraints.maxWidth < 700;
 
           if (isCompact) {
-            // Mobile / Portrait Phone Layout (smooth stacked view)
+            // Mobile / Portrait Phone Layout
             return Column(
               children: [
-                // Top: Video Preview Player (isolated for smooth rendering)
+                // Top: Video Preview Player
                 Expanded(
                   flex: 4,
                   child: Padding(
@@ -126,7 +143,8 @@ class EditorScreen extends ConsumerWidget {
                         isPlaying: editorState.isPlaying,
                         activeItem: editorState.selectedItem,
                         activeEffects: editorState.effects,
-                        activeCaption: editorState.captions.isEmpty ? null : editorState.captions.first,
+                        activeCaption: _getActiveCaptionAtPlayhead(editorState),
+                        mediaFiles: editorState.mediaFiles,
                         onTogglePlay: () => editorNotifier.togglePlayPause(),
                         onSeek: (t) => editorNotifier.seekPlayhead(t),
                       ),
@@ -222,7 +240,8 @@ class EditorScreen extends ConsumerWidget {
                             isPlaying: editorState.isPlaying,
                             activeItem: editorState.selectedItem,
                             activeEffects: editorState.effects,
-                            activeCaption: editorState.captions.isEmpty ? null : editorState.captions.first,
+                            activeCaption: _getActiveCaptionAtPlayhead(editorState),
+                            mediaFiles: editorState.mediaFiles,
                             onTogglePlay: () => editorNotifier.togglePlayPause(),
                             onSeek: (t) => editorNotifier.seekPlayhead(t),
                           ),
@@ -300,6 +319,50 @@ class EditorScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  /// Get the active caption at the current playhead position
+  CaptionModel? _getActiveCaptionAtPlayhead(EditorState state) {
+    for (final caption in state.captions) {
+      if (state.playhead >= caption.startTime &&
+          state.playhead <= caption.startTime + caption.duration) {
+        return caption;
+      }
+    }
+    return null;
+  }
+
+  /// Pick a video file and import it into the editor
+  Future<void> _pickAndImportMedia(BuildContext context, EditorNotifier editorNotifier) async {
+    try {
+      final result = await FilePicker.pickFile(
+        type: FileType.video,
+      );
+
+      if (result != null && result.path != null) {
+        final filePath = result.path!;
+        await editorNotifier.importMediaFile(filePath);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Imported: ${result.name}'),
+              backgroundColor: AppTheme.primary,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Import failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildInspectorTab(

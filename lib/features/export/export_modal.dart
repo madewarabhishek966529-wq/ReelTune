@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:reeltune/app/theme.dart';
 import 'package:reeltune/data/models/export_job_model.dart';
 import 'package:reeltune/features/editor/editor_state.dart';
@@ -55,7 +57,36 @@ class _ExportModalState extends ConsumerState<ExportModal> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+
+            // Source file info
+            if (widget.editorState.mediaFiles.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.video_file, size: 18, color: AppTheme.accentNeon),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Source: ${widget.editorState.mediaFiles.first.filename}',
+                        style: const TextStyle(fontSize: 12, color: Colors.white70),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '${(widget.editorState.mediaFiles.first.fileSize / 1024 / 1024).toStringAsFixed(1)} MB',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
 
             // Social Presets Grid
             const Text('Select Social Media Preset', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -114,7 +145,7 @@ class _ExportModalState extends ConsumerState<ExportModal> {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.rocket_launch_rounded, size: 18),
                 label: Text(
-                  exportQueue.isProcessing ? 'Rendering in background...' : 'Start Export (${_selectedPreset.name})',
+                  exportQueue.isProcessing ? 'Rendering...' : 'Start Export (${_selectedPreset.name})',
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
@@ -181,6 +212,13 @@ class _ExportModalState extends ConsumerState<ExportModal> {
                                     ),
                                   ),
                                   _statusBadge(job.status),
+                                  // Share button for completed exports
+                                  if (job.status == ExportStatus.completed)
+                                    IconButton(
+                                      icon: const Icon(Icons.share_rounded, size: 16, color: AppTheme.primaryAccent),
+                                      tooltip: 'Share',
+                                      onPressed: () => _shareExport(job),
+                                    ),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline, size: 16, color: Colors.grey),
                                     onPressed: () => exportNotifier.deleteExport(job.id),
@@ -194,12 +232,49 @@ class _ExportModalState extends ConsumerState<ExportModal> {
                                   backgroundColor: const Color(0xFF141721),
                                   valueColor: const AlwaysStoppedAnimation(AppTheme.primaryAccent),
                                 ),
-                              ],
-                              if (job.outputFileSize != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Size: ${(job.outputFileSize! / 1024 / 1024).toStringAsFixed(2)} MB • Verified Safe',
-                                  style: const TextStyle(fontSize: 11, color: AppTheme.accentNeon),
+                                  '${(job.progress * 100).toStringAsFixed(0)}% complete',
+                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                ),
+                              ],
+                              if (job.status == ExportStatus.completed && job.outputFileSize != null) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.check_circle, size: 12, color: AppTheme.accentNeon),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Size: ${(job.outputFileSize! / 1024 / 1024).toStringAsFixed(2)} MB',
+                                      style: const TextStyle(fontSize: 11, color: AppTheme.accentNeon),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        job.outputPath,
+                                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (job.status == ExportStatus.failed && job.errorReason != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Error: ${job.errorReason}',
+                                  style: const TextStyle(fontSize: 10, color: Colors.redAccent),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.refresh, size: 14),
+                                  label: const Text('Retry', style: TextStyle(fontSize: 11)),
+                                  onPressed: () => exportNotifier.retryExport(
+                                    job.id,
+                                    widget.editorState,
+                                  ),
                                 ),
                               ],
                             ],
@@ -212,6 +287,38 @@ class _ExportModalState extends ConsumerState<ExportModal> {
         ),
       ),
     );
+  }
+
+  Future<void> _shareExport(ExportJobModel job) async {
+    try {
+      final file = File(job.outputPath);
+      if (await file.exists()) {
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(job.outputPath)],
+            title: 'ReelTune Export: ${job.outputFilename}',
+          ),
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Export file not found'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Share failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   IconData _statusIcon(ExportStatus status) {
